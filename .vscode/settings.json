@@ -51,5 +51,6 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "NexoGame.sln"
+    "dotnet.defaultSolution": "NexoGame.sln",
+    "chat.fontSize": 17
 }
