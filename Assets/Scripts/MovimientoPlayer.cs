@@ -14,7 +14,7 @@ public class MovimientoPlayer : MonoBehaviour
     // Mouse look
     private Vector3 camForward;
     private Vector3 camRight;
-    public float mouseSensitivity = 100f;
+    public float mouseSensitivity = 100f;  
     public bool lockCursor = true;
     private float xRotation = 0f;
     // Gravity

@@ -7,7 +7,7 @@ public class VidaDañoPlayer : MonoBehaviour
     public float vidaMaxima = 100f;
     public float vidaActual = 100f;
 
-    [Header("Puño (daño)")]
+    [Header("Daño de Puñetazo")]
     public float dañoPuño = 10f;
     public float alcancePuño = 1.5f;
     public float tiempoRecargaPuño = 0.5f;
@@ -88,8 +88,6 @@ public class VidaDañoPlayer : MonoBehaviour
     void Morir(GameObject atacante)
     {
         OnDeath?.Invoke();
-
-        // Lógica por defecto: destruir o desactivar
         if (destruirAlMorir)
             Destroy(gameObject);
         else

@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-public class EnemyMelee : MonoBehaviour
+public class DañoVidaEnemigo : MonoBehaviour
 {
     [Header("Vida")]
     public float vidaMaxima = 50f;
