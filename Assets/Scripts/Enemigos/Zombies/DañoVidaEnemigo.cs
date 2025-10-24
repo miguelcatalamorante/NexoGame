@@ -1,21 +1,26 @@
 using System;
 using UnityEngine;
 
+[RequireComponent(typeof(Collider))]
 public class DañoVidaEnemigo : MonoBehaviour
 {
+    // ------------ Vida ------------
     [Header("Vida")]
     public float vidaMaxima = 50f;
     public float vidaActual = 50f;
     public bool destruirAlMorir = true;
+    public float tiempoDesaparecerAlMorir = 4f;
 
+    // ------------ Detección / movimiento ------------
     [Header("Detección y movimiento")]
     public string targetTag = "Player";
-    public float detectionRange = 10f;
-    public float moveSpeed = 3f;
-    public float runSpeed = 5f;
+    public float detectionRange = 12f;
+    public float moveSpeed = 2.0f;    // caminar
+    public float runSpeed = 4.0f;     // correr
     public float stoppingDistance = 1.2f;
-    public float rotationSpeed = 10f;
+    public float rotationSpeed = 8f;
 
+    // ------------ Ataque ------------
     [Header("Ataque cuerpo a cuerpo")]
     public float dañoMelee = 15f;
     public float attackRange = 1.5f;
@@ -24,32 +29,37 @@ public class DañoVidaEnemigo : MonoBehaviour
     [Tooltip("Tiempo que el enemigo permanece parado cuando realiza el ataque")]
     public float attackStopDuration = 0.6f;
 
+    // ------------ Animator (parámetros genéricos) ------------
+    [Header("Animator")]
+    public Animator anim;                 // se detecta solo si no lo asignas
+    public string pSpeed = "Speed";
+    public string pAttack = "Attack";
+    public string pAttackIndex = "AttackIndex";
+    public string pScream = "Scream";
+    public string pDead = "Dead";
+    [Tooltip("Cuántas variantes de ataque hay (0..N-1)")]
+    public int attackVariants = 4;
+
+    // ------------ Eventos ------------
     public event Action OnDeath;
 
-    // ---------------- Animator ----------------
-    [Header("Animator")]
-    public Animator anim;                 // arrastrar en el Inspector
-    [Tooltip("Nombre del parámetro float para el Blend Tree")]
-    public string pSpeed = "Speed";
-    [Tooltip("Nombre trigger Attack en el Animator")]
-    public string pAttack = "Attack";
-    // ------------------------------------------
-
+    // ------------ Internos ------------
     private Transform target;
     private float lastAttackTime = -999f;
-
-    // Movimiento seguro
-    private Rigidbody rb;
-    private Vector3 desiredVelocity = Vector3.zero;
-
-    // Estado de ataque para detener movimiento mientras ataca
     private bool isAttacking = false;
     private float attackEndTime = 0f;
 
-    // Suavizado de Speed para el Blend Tree
-    private float speedAnim;          // valor actual que enviamos al Animator
-    private float speedAnimVelRef;    // ref para SmoothDamp
-    public float speedAnimSmooth = 0.08f; // cuanto más pequeño, más suave
+    // Locomoción básica (sin NavMeshAgent, se puede añadir luego)
+    private Rigidbody rb;
+    private Vector3 desiredVelocity = Vector3.zero;
+
+    // Suavizado para el Blend Tree
+    private float speedAnim;
+    private float speedAnimVelRef;
+    public float speedAnimSmooth = 0.08f;
+
+    // Scream al detectar por primera vez
+    private bool hasScreamed = false;
 
     void Start()
     {
@@ -61,32 +71,32 @@ public class DañoVidaEnemigo : MonoBehaviour
 
         rb = GetComponent<Rigidbody>();
 
-        GameObject go = GameObject.FindGameObjectWithTag(targetTag);
+        var go = GameObject.FindGameObjectWithTag(targetTag);
         if (go) target = go.transform;
 
-        // empezamos en idle
         SetSpeedParam(0f, true);
     }
 
     void Update()
     {
-        // si está atacando, no mover
+        // Bloqueo mientras dura la animación de ataque
         if (isAttacking)
         {
             if (Time.time >= attackEndTime) isAttacking = false;
             else
             {
                 desiredVelocity = Vector3.zero;
-                SetSpeedParam(0f); // idle mientras dura el ataque
+                SetSpeedParam(0f);
                 return;
             }
         }
 
-        // buscar target si se perdió
-        if (target == null)
+        // re-adquirir target si se perdió
+        if (!target)
         {
-            GameObject go = GameObject.FindGameObjectWithTag(targetTag);
+            var go = GameObject.FindGameObjectWithTag(targetTag);
             if (go) target = go.transform;
+
             desiredVelocity = Vector3.zero;
             SetSpeedParam(0f);
             return;
@@ -94,58 +104,61 @@ public class DañoVidaEnemigo : MonoBehaviour
 
         float d = Vector3.Distance(transform.position, target.position);
 
-        // fuera de rango -> quieto
+        // fuera de rango
         if (d > detectionRange)
         {
             desiredVelocity = Vector3.zero;
             SetSpeedParam(0f);
+            hasScreamed = false; // volverá a gritar cuando te redescubra si quieres
             return;
         }
 
-        // girar hacia el jugador (suave)
+        // primera vez que te detecta → scream opcional
+        if (!hasScreamed && anim && HasParameter(anim, pScream))
+        {
+            hasScreamed = true;
+            anim.SetTrigger(pScream);
+        }
+
+        // girar hacia el jugador
         Vector3 dir = target.position - transform.position;
         dir.y = 0f;
         if (dir.sqrMagnitude > 0.0001f)
         {
-            Quaternion targetRot = Quaternion.LookRotation(dir.normalized);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotationSpeed * Time.deltaTime);
+            Quaternion q = Quaternion.LookRotation(dir.normalized);
+            transform.rotation = Quaternion.Slerp(transform.rotation, q, rotationSpeed * Time.deltaTime);
         }
 
-        // ¿debemos avanzar?
         float distToStop = d - stoppingDistance;
 
         if (distToStop > 0.05f)
         {
-            // más lejos → corre; cerca → camina
+            // corre si estás a >3m del stoppingDistance
             bool shouldRun = distToStop > 3f;
             float speed = shouldRun ? runSpeed : moveSpeed;
 
             desiredVelocity = transform.forward * speed;
-
-            // enviar Speed al Animator suavizado
             SetSpeedParam(speed);
         }
         else
         {
-            // hemos llegado a stoppingDistance -> nos quedamos quietos
             desiredVelocity = Vector3.zero;
             SetSpeedParam(0f);
 
-            // si además estamos dentro del rango de ataque, atacamos
+            // ataque si hay cooldown y estás en rango
             if (d <= attackRange && Time.time - lastAttackTime >= attackCooldown)
             {
                 lastAttackTime = Time.time;
-                RealizarAtaque();
+                DoAttack();
             }
         }
     }
 
     void FixedUpdate()
     {
-        // Aplicar movimiento de forma estable
+        // Movimiento estable con o sin Rigidbody
         if (rb != null && !rb.isKinematic)
         {
-            // Parche anti “overshoot”: si no queremos movernos, frenamos del todo
             if (desiredVelocity.sqrMagnitude < 0.0001f)
             {
                 rb.velocity = Vector3.zero;
@@ -163,22 +176,8 @@ public class DañoVidaEnemigo : MonoBehaviour
         }
     }
 
-    void SetSpeedParam(float targetSpeed, bool instant = false)
-    {
-        if (anim == null) return;
-
-        // Convertimos a "unidades de blend" (tu Blend Tree usa ~0, 1.5 y 4-5)
-        float blendSpeed = targetSpeed; // ya usamos las mismas unidades (m/s)
-
-        if (instant)
-            speedAnim = blendSpeed;
-        else
-            speedAnim = Mathf.SmoothDamp(speedAnim, blendSpeed, ref speedAnimVelRef, speedAnimSmooth);
-
-        anim.SetFloat(pSpeed, speedAnim);
-    }
-
-    void RealizarAtaque()
+    // ---------- Anim / Daño ----------
+    void DoAttack()
     {
         isAttacking = true;
         attackEndTime = Time.time + attackStopDuration;
@@ -190,42 +189,103 @@ public class DañoVidaEnemigo : MonoBehaviour
             rb.angularVelocity = Vector3.zero;
         }
 
-        if (anim) anim.SetTrigger(pAttack);
+        if (anim)
+        {
+            if (HasParameter(anim, pAttackIndex) && attackVariants > 0)
+                anim.SetInteger(pAttackIndex, UnityEngine.Random.Range(0, attackVariants));
 
-        // Daño (puedes moverlo a un Animation Event si prefieres)
+            if (HasParameter(anim, pAttack))
+                anim.SetTrigger(pAttack);
+        }
+
+        // Daño inmediato (o llama esta lógica desde un Animation Event “OnAttackHitEvent”)
+        TryDealDamage();
+    }
+
+    // Llama a este método desde un Animation Event en el fotograma del golpe.
+    public void OnAttackHitEvent()
+    {
+        TryDealDamage();
+    }
+
+    void TryDealDamage()
+    {
+        // Si usas capas, golpea solo al Player
         if (targetLayers.value != 0)
         {
-            foreach (var c in Physics.OverlapSphere(transform.position, attackRange, targetLayers))
+            foreach (var c in Physics.OverlapSphere(transform.position + transform.forward * (attackRange * 0.5f), attackRange, targetLayers))
             {
                 var vd = c.GetComponentInParent<VidaDañoPlayer>();
                 if (vd != null) vd.RecibirDaño(dañoMelee, gameObject);
             }
         }
-        else
+        else if (target != null && Vector3.Distance(transform.position, target.position) <= attackRange + 0.2f)
         {
-            var vdDirect = target.GetComponentInParent<VidaDañoPlayer>();
-            if (vdDirect != null) vdDirect.RecibirDaño(dañoMelee, gameObject);
+            var vd = target.GetComponentInParent<VidaDañoPlayer>();
+            if (vd != null) vd.RecibirDaño(dañoMelee, gameObject);
         }
     }
 
+    // ---------- Vida ----------
     public void RecibirDaño(float cantidad, GameObject atacante = null)
     {
-        if (cantidad <= 0f) return;
+        if (cantidad <= 0f || IsDead()) return;
+
         vidaActual = Mathf.Clamp(vidaActual - cantidad, 0f, vidaMaxima);
         if (vidaActual <= 0f) Morir(atacante);
     }
 
     public void Curar(float cantidad)
     {
-        if (cantidad <= 0f) return;
+        if (cantidad <= 0f || IsDead()) return;
         vidaActual = Mathf.Clamp(vidaActual + cantidad, 0f, vidaMaxima);
     }
 
+    bool IsDead() => vidaActual <= 0f;
+
     void Morir(GameObject atacante)
     {
+        if (IsDead()) return;
+
+        vidaActual = 0f;
         OnDeath?.Invoke();
-        if (destruirAlMorir) Destroy(gameObject);
-        else enabled = false;
+
+        // detener comportamiento
+        enabled = false;
+        desiredVelocity = Vector3.zero;
+
+        // anim de muerte
+        if (anim && HasParameter(anim, pDead)) anim.SetBool(pDead, true);
+
+        // desactivar colisiones si quieres:
+        var col = GetComponent<Collider>();
+        if (col) col.enabled = false;
+
+        if (destruirAlMorir)
+            Destroy(gameObject, tiempoDesaparecerAlMorir);
+    }
+
+    // ---------- Utils ----------
+    void SetSpeedParam(float targetSpeed, bool instant = false)
+    {
+        if (!anim || !HasParameter(anim, pSpeed)) return;
+
+        float blendSpeed = targetSpeed; // usamos m/s directamente
+
+        if (instant)
+            speedAnim = blendSpeed;
+        else
+            speedAnim = Mathf.SmoothDamp(speedAnim, blendSpeed, ref speedAnimVelRef, speedAnimSmooth);
+
+        anim.SetFloat(pSpeed, speedAnim);
+    }
+
+    bool HasParameter(Animator a, string name)
+    {
+        if (a == null || string.IsNullOrEmpty(name)) return false;
+        foreach (var p in a.parameters)
+            if (p.name == name) return true;
+        return false;
     }
 
     void OnDrawGizmosSelected()
@@ -234,6 +294,8 @@ public class DañoVidaEnemigo : MonoBehaviour
         Gizmos.DrawWireSphere(transform.position, detectionRange);
 
         Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, attackRange);
+        // Centro adelantado para visualizar un ataque frontal
+        Vector3 center = transform.position + transform.forward * (attackRange * 0.5f);
+        Gizmos.DrawWireSphere(center, attackRange);
     }
 }
