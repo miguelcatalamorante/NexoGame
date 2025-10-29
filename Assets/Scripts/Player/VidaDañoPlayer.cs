@@ -12,12 +12,13 @@ public class VidaDañoPlayer : MonoBehaviour
     public float alcancePuño = 1.5f;
     public float tiempoRecargaPuño = 0.5f;
     public LayerMask capasObjetivo; // Asigna aquí las capas "Enemies", "Animals", "Players" en el Inspector
-    public Transform origenPuño; // Normalmente la cámara o un transform en la posición de la mano
+    public Transform origenPuño;    // Normalmente la cámara o un transform en la posición de la mano
 
     [Header("Opciones")]
     public bool destruirAlMorir = false; // si true destruye el GameObject al morir
 
     public event Action OnDeath; // suscribible desde otros scripts si se quiere
+    public event Action<float, float> OnHealthChanged; // (vidaActual, vidaMaxima)
 
     private float ultimoGolpe = -999f;
 
@@ -26,6 +27,9 @@ public class VidaDañoPlayer : MonoBehaviour
         vidaActual = Mathf.Clamp(vidaActual, 0f, vidaMaxima);
         if (origenPuño == null && Camera.main != null)
             origenPuño = Camera.main.transform;
+
+        // Notificar vida inicial a la UI
+        OnHealthChanged?.Invoke(vidaActual, vidaMaxima);
     }
 
     void Update()
@@ -43,21 +47,23 @@ public class VidaDañoPlayer : MonoBehaviour
         ultimoGolpe = Time.time;
 
         Vector3 origen = origenPuño != null ? origenPuño.position : transform.position;
-        Vector3 dir = origenPuño != null ? origenPuño.forward : transform.forward;
+        Vector3 dir    = origenPuño != null ? origenPuño.forward  : transform.forward;
 
         RaycastHit hit;
         if (Physics.Raycast(origen, dir, out hit, alcancePuño, capasObjetivo))
         {
-            // Intentar aplicar daño a un componente VidaDañoPlayer en el objeto golpeado o en sus padres
+            // ✅ Dañar a otro jugador con VidaDañoPlayer
             VidaDañoPlayer vd = hit.collider.GetComponentInParent<VidaDañoPlayer>();
             if (vd != null)
             {
                 vd.RecibirDaño(dañoPuño, gameObject);
             }
-            else
+
+            // ✅ Dañar a un enemigo con DañoVidaEnemigo (si existe ese script)
+            DañoVidaEnemigo de = hit.collider.GetComponentInParent<DañoVidaEnemigo>();
+            if (de != null)
             {
-                // Si el objetivo no tiene VidaDañoPlayer pero quieres soportar otras interfaces,
-                // puedes comprobar aquí y llamar a métodos alternativos.
+                de.RecibirDaño(dañoPuño, gameObject);
             }
         }
     }
@@ -69,6 +75,9 @@ public class VidaDañoPlayer : MonoBehaviour
 
         vidaActual -= cantidad;
         vidaActual = Mathf.Clamp(vidaActual, 0f, vidaMaxima);
+
+        // Notificar a la UI
+        OnHealthChanged?.Invoke(vidaActual, vidaMaxima);
 
         // Aquí puedes reproducir efectos, animaciones, feedback, etc.
 
@@ -82,7 +91,11 @@ public class VidaDañoPlayer : MonoBehaviour
     public void Curar(float cantidad)
     {
         if (cantidad <= 0f) return;
+
         vidaActual = Mathf.Clamp(vidaActual + cantidad, 0f, vidaMaxima);
+
+        // Notificar a la UI
+        OnHealthChanged?.Invoke(vidaActual, vidaMaxima);
     }
 
     void Morir(GameObject atacante)

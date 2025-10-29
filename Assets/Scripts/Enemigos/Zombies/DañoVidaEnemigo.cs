@@ -29,9 +29,9 @@ public class DañoVidaEnemigo : MonoBehaviour
     [Tooltip("Tiempo que el enemigo permanece parado cuando realiza el ataque")]
     public float attackStopDuration = 0.6f;
 
-    // ------------ Animator (parámetros genéricos) ------------
+    // ------------ Animator ------------
     [Header("Animator")]
-    public Animator anim;                 // se detecta solo si no lo asignas
+    public Animator anim;
     public string pSpeed = "Speed";
     public string pAttack = "Attack";
     public string pAttackIndex = "AttackIndex";
@@ -49,16 +49,14 @@ public class DañoVidaEnemigo : MonoBehaviour
     private bool isAttacking = false;
     private float attackEndTime = 0f;
 
-    // Locomoción básica (sin NavMeshAgent, se puede añadir luego)
     private Rigidbody rb;
     private Vector3 desiredVelocity = Vector3.zero;
 
-    // Suavizado para el Blend Tree
+    // Suavizado del Blend Tree
     private float speedAnim;
     private float speedAnimVelRef;
     public float speedAnimSmooth = 0.08f;
 
-    // Scream al detectar por primera vez
     private bool hasScreamed = false;
 
     void Start()
@@ -71,6 +69,14 @@ public class DañoVidaEnemigo : MonoBehaviour
 
         rb = GetComponent<Rigidbody>();
 
+        // ⚙️ Configuración segura del Rigidbody
+        if (rb)
+        {
+            rb.isKinematic = false;                   // lo movemos por física
+            rb.useGravity = false;                    // no queremos que se caiga
+            rb.constraints = RigidbodyConstraints.FreezeRotation; // solo rotación bloqueada
+        }
+
         var go = GameObject.FindGameObjectWithTag(targetTag);
         if (go) target = go.transform;
 
@@ -79,7 +85,7 @@ public class DañoVidaEnemigo : MonoBehaviour
 
     void Update()
     {
-        // Bloqueo mientras dura la animación de ataque
+        // Bloqueo durante la animación de ataque
         if (isAttacking)
         {
             if (Time.time >= attackEndTime) isAttacking = false;
@@ -91,7 +97,7 @@ public class DañoVidaEnemigo : MonoBehaviour
             }
         }
 
-        // re-adquirir target si se perdió
+        // Buscar o re-adquirir al jugador
         if (!target)
         {
             var go = GameObject.FindGameObjectWithTag(targetTag);
@@ -104,23 +110,23 @@ public class DañoVidaEnemigo : MonoBehaviour
 
         float d = Vector3.Distance(transform.position, target.position);
 
-        // fuera de rango
+        // Fuera de rango → quieto
         if (d > detectionRange)
         {
             desiredVelocity = Vector3.zero;
             SetSpeedParam(0f);
-            hasScreamed = false; // volverá a gritar cuando te redescubra si quieres
+            hasScreamed = false;
             return;
         }
 
-        // primera vez que te detecta → scream opcional
+        // Primera detección → grito
         if (!hasScreamed && anim && HasParameter(anim, pScream))
         {
             hasScreamed = true;
             anim.SetTrigger(pScream);
         }
 
-        // girar hacia el jugador
+        // Rotación suave hacia el jugador
         Vector3 dir = target.position - transform.position;
         dir.y = 0f;
         if (dir.sqrMagnitude > 0.0001f)
@@ -133,7 +139,7 @@ public class DañoVidaEnemigo : MonoBehaviour
 
         if (distToStop > 0.05f)
         {
-            // corre si estás a >3m del stoppingDistance
+            // Corre si está lejos, camina si está cerca
             bool shouldRun = distToStop > 3f;
             float speed = shouldRun ? runSpeed : moveSpeed;
 
@@ -145,7 +151,7 @@ public class DañoVidaEnemigo : MonoBehaviour
             desiredVelocity = Vector3.zero;
             SetSpeedParam(0f);
 
-            // ataque si hay cooldown y estás en rango
+            // Si está en rango → atacar
             if (d <= attackRange && Time.time - lastAttackTime >= attackCooldown)
             {
                 lastAttackTime = Time.time;
@@ -156,53 +162,48 @@ public class DañoVidaEnemigo : MonoBehaviour
 
     void FixedUpdate()
     {
-        // Movimiento estable con o sin Rigidbody
-        if (rb != null && !rb.isKinematic)
+        // Si no hay intención de moverse → parar
+        if (desiredVelocity.sqrMagnitude < 0.0001f)
         {
-            if (desiredVelocity.sqrMagnitude < 0.0001f)
+            if (rb && !rb.isKinematic)
             {
                 rb.velocity = Vector3.zero;
                 rb.angularVelocity = Vector3.zero;
-                return;
             }
+            return;
+        }
 
+        // Movimiento físico si hay Rigidbody
+        if (rb && !rb.isKinematic)
+        {
             rb.MovePosition(rb.position + desiredVelocity * Time.fixedDeltaTime);
             rb.MoveRotation(transform.rotation);
         }
         else
         {
-            if (desiredVelocity.sqrMagnitude > 0.000001f)
-                transform.position += desiredVelocity * Time.fixedDeltaTime;
+            transform.position += desiredVelocity * Time.fixedDeltaTime;
         }
     }
 
-    // ---------- Anim / Daño ----------
-    void DoAttack()
+    // ---------- Ataque ----------
+ void DoAttack()
+{
+    isAttacking = true;
+    attackEndTime = Time.time + attackStopDuration;
+    desiredVelocity = Vector3.zero;
+
+    if (rb && !rb.isKinematic) { rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+
+    if (anim)
     {
-        isAttacking = true;
-        attackEndTime = Time.time + attackStopDuration;
-        desiredVelocity = Vector3.zero;
-
-        if (rb != null && !rb.isKinematic)
-        {
-            rb.velocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-        }
-
-        if (anim)
-        {
-            if (HasParameter(anim, pAttackIndex) && attackVariants > 0)
-                anim.SetInteger(pAttackIndex, UnityEngine.Random.Range(0, attackVariants));
-
-            if (HasParameter(anim, pAttack))
-                anim.SetTrigger(pAttack);
-        }
-
-        // Daño inmediato (o llama esta lógica desde un Animation Event “OnAttackHitEvent”)
-        TryDealDamage();
+        anim.CrossFadeInFixedTime("Ataque", 0.1f, 0); // nombre EXACTO del estado
     }
 
-    // Llama a este método desde un Animation Event en el fotograma del golpe.
+    TryDealDamage();
+}
+
+
+    // Método para Animation Event
     public void OnAttackHitEvent()
     {
         TryDealDamage();
@@ -210,7 +211,6 @@ public class DañoVidaEnemigo : MonoBehaviour
 
     void TryDealDamage()
     {
-        // Si usas capas, golpea solo al Player
         if (targetLayers.value != 0)
         {
             foreach (var c in Physics.OverlapSphere(transform.position + transform.forward * (attackRange * 0.5f), attackRange, targetLayers))
@@ -219,7 +219,7 @@ public class DañoVidaEnemigo : MonoBehaviour
                 if (vd != null) vd.RecibirDaño(dañoMelee, gameObject);
             }
         }
-        else if (target != null && Vector3.Distance(transform.position, target.position) <= attackRange + 0.2f)
+        else if (target && Vector3.Distance(transform.position, target.position) <= attackRange + 0.2f)
         {
             var vd = target.GetComponentInParent<VidaDañoPlayer>();
             if (vd != null) vd.RecibirDaño(dañoMelee, gameObject);
@@ -250,14 +250,11 @@ public class DañoVidaEnemigo : MonoBehaviour
         vidaActual = 0f;
         OnDeath?.Invoke();
 
-        // detener comportamiento
         enabled = false;
         desiredVelocity = Vector3.zero;
 
-        // anim de muerte
         if (anim && HasParameter(anim, pDead)) anim.SetBool(pDead, true);
 
-        // desactivar colisiones si quieres:
         var col = GetComponent<Collider>();
         if (col) col.enabled = false;
 
@@ -265,12 +262,12 @@ public class DañoVidaEnemigo : MonoBehaviour
             Destroy(gameObject, tiempoDesaparecerAlMorir);
     }
 
-    // ---------- Utils ----------
+    // ---------- Utilidades ----------
     void SetSpeedParam(float targetSpeed, bool instant = false)
     {
         if (!anim || !HasParameter(anim, pSpeed)) return;
 
-        float blendSpeed = targetSpeed; // usamos m/s directamente
+        float blendSpeed = targetSpeed;
 
         if (instant)
             speedAnim = blendSpeed;
@@ -294,7 +291,6 @@ public class DañoVidaEnemigo : MonoBehaviour
         Gizmos.DrawWireSphere(transform.position, detectionRange);
 
         Gizmos.color = Color.red;
-        // Centro adelantado para visualizar un ataque frontal
         Vector3 center = transform.position + transform.forward * (attackRange * 0.5f);
         Gizmos.DrawWireSphere(center, attackRange);
     }
