@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using System;
 
 public class GameManager : MonoBehaviour
 {
@@ -7,6 +8,7 @@ public class GameManager : MonoBehaviour
 
     [Header("Estado de la partida")]
     [SerializeField] private int killsThisRun = 0;
+    public event Action OnKillRegistered;
 
     private void Awake()
     {
@@ -26,6 +28,7 @@ public class GameManager : MonoBehaviour
     public void RegisterKill()
     {
         killsThisRun++;
+        OnKillRegistered?.Invoke();
     }
 
     public int GetKillsThisRun() => killsThisRun;

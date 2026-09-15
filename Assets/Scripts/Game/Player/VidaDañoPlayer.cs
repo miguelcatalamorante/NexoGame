@@ -52,14 +52,14 @@ public class VidaDañoPlayer : MonoBehaviour
         RaycastHit hit;
         if (Physics.Raycast(origen, dir, out hit, alcancePuño, capasObjetivo))
         {
-            // ✅ Dañar a otro jugador con VidaDañoPlayer
+            // Dañar a otro jugador con VidaDañoPlayer
             VidaDañoPlayer vd = hit.collider.GetComponentInParent<VidaDañoPlayer>();
             if (vd != null)
             {
                 vd.RecibirDaño(dañoPuño, gameObject);
             }
 
-            // ✅ Dañar a un enemigo con DañoVidaEnemigo (si existe ese script)
+            // Dañar a un enemigo con DañoVidaEnemigo (si existe ese script)
             DañoVidaEnemigo de = hit.collider.GetComponentInParent<DañoVidaEnemigo>();
             if (de != null)
             {

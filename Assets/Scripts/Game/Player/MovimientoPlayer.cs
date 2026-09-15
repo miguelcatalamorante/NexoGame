@@ -14,24 +14,24 @@ public class MovimientoPlayer : MonoBehaviour
     // NUEVO: referencia a PlayerResources
     public PlayerResources resources;
 
-    // ---------- Movimiento ----------
+    //  Movimiento 
     [Header("Movimiento")]
     public float velocidadPlayer = 5f;
     public float runMultiplier = 1.8f;
     private Vector3 movimiento;
     private float verticalVelocity = 0f;
 
-    // ---------- Mirar con mouse ----------
+    //  Mirar con mouse 
     [Header("Mirar con mouse")]
     public float mouseSensitivity = 300f;
     public bool lockCursor = true;
     private float xRotation = 0f;
 
-    // ---------- Física ----------
+    //  Física 
     [Header("Física")]
     public float gravedad = -9.81f;
 
-    // ---------- Agacharse ----------
+    //  Agacharse 
     [Header("Agacharse")]
     public float crouchHeight = 1.0f;
     private float originalControllerHeight;
@@ -39,11 +39,11 @@ public class MovimientoPlayer : MonoBehaviour
     private Vector3 originalCameraLocalPos;
     private bool isCrouching = false;
 
-    // ---------- Salto ----------
+    // Salto 
     [Header("Salto (Y controlada por física)")]
     public float jumpSpeed = 5f; // impulso vertical
 
-    // ---------- Root Motion Jump ----------
+    //  Root Motion Jump 
     [Header("Root Motion Jump")]
     public string jumpStateName = "Jumping";
     [Range(0.5f, 1.0f)] public float endJumpNormalizedTime = 0.9f;
@@ -57,7 +57,7 @@ public class MovimientoPlayer : MonoBehaviour
         if (!playerController) playerController = GetComponent<CharacterController>();
         if (!camaraPrincipal) camaraPrincipal = Camera.main;
         if (!animator) animator = GetComponent<Animator>();
-        if (!resources) resources = GetComponent<PlayerResources>(); // <-- auto-asignación
+        if (!resources) resources = GetComponent<PlayerResources>(); // intentar obtener PlayerResources
 
         if (lockCursor)
         {
@@ -75,7 +75,7 @@ public class MovimientoPlayer : MonoBehaviour
 
     void Update()
     {
-        // -------- Mirar con mouse --------
+        //  Mirar con mouse 
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * Time.deltaTime;
         float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity * Time.deltaTime;
 
@@ -87,7 +87,7 @@ public class MovimientoPlayer : MonoBehaviour
 
         transform.Rotate(Vector3.up * mouseX);
 
-        // -------- Inputs movimiento (XZ) --------
+        //  Inputs movimiento (XZ) 
         float inputX = Input.GetAxisRaw("Horizontal");
         float inputZ = Input.GetAxisRaw("Vertical");
         Vector3 input = new Vector3(inputX, 0f, inputZ);
@@ -101,7 +101,7 @@ public class MovimientoPlayer : MonoBehaviour
         if (crouchKey && !isCrouching) SetCrouch(true);
         if (!crouchKey && isCrouching) SetCrouch(false);
 
-        // ¿Puede correr? (no agotado, se mueve, no agachado)
+        // no agotado, se mueve, no agachado
         bool canRun = resources ? !resources.IsExhausted() : true;
         bool isRunning = wantsRun && isMoving && !isCrouching && canRun;
 
@@ -112,7 +112,7 @@ public class MovimientoPlayer : MonoBehaviour
         Vector3 moveDir = (transform.right * input.x + transform.forward * input.z).normalized;
         Vector3 moveXZ = moveDir * velocidadPlayer * speedMultiplier;
 
-        // -------- Suelo / Salto / Gravedad --------
+        //  Suelo / Salto / Gravedad 
         bool grounded = playerController.isGrounded;
 
         if (grounded && !isJumpingRM)
@@ -121,7 +121,7 @@ public class MovimientoPlayer : MonoBehaviour
 
             if (Input.GetButtonDown("Jump") && !isCrouching)
             {
-                verticalVelocity = jumpSpeed;   // IMPULSO EN Y AQUÍ
+                verticalVelocity = jumpSpeed;   // IMPULSO EN Y 
                 isJumpingRM = true;
                 rmJumpStartTime = Time.time;
 
@@ -139,7 +139,7 @@ public class MovimientoPlayer : MonoBehaviour
             verticalVelocity += gravedad * Time.deltaTime;
         }
 
-        // -------- Movimiento cuando NO hay Root Motion --------
+        //  Movimiento cuando NO hay Root Motion 
         if (!isJumpingRM)
         {
             movimiento = moveXZ;
@@ -147,7 +147,7 @@ public class MovimientoPlayer : MonoBehaviour
             playerController.Move(movimiento * Time.deltaTime);
         }
 
-        // -------- Lógica de salida del modo RM --------
+        //  Lógica de salida del modo RM 
         if (isJumpingRM && animator)
         {
             AnimatorStateInfo st = animator.GetCurrentAnimatorStateInfo(0);
@@ -160,7 +160,7 @@ public class MovimientoPlayer : MonoBehaviour
             }
         }
 
-        // -------- Flags del Animator --------
+        //  Flags del Animator 
         if (animator)
         {
             float velX = input.x * speedMultiplier;
@@ -172,14 +172,14 @@ public class MovimientoPlayer : MonoBehaviour
             animator.SetBool("Crouching", isCrouching);
         }
 
-        // === NUEVO: tick de estamina (al final del frame es buena idea)
+        //   tick de estamina (al final del frame es buena idea)
         if (resources)
         {
             resources.TickStamina(isRunning, isMoving, Time.deltaTime);
         }
     }
 
-    // ---------- Root Motion: usamos XZ del clip y Y propia ----------
+    //  Root Motion: usamos XZ del clip y Y propia 
     void OnAnimatorMove()
     {
         if (!animator || !animator.applyRootMotion) return;
@@ -230,4 +230,4 @@ public class MovimientoPlayer : MonoBehaviour
             isCrouching = false;
         }
     }
-}
+} 

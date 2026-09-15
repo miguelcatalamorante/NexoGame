@@ -1,16 +1,19 @@
+using System;
 using UnityEngine;
 
 public class InventarioArmasJugador : MonoBehaviour
 {
-    [Header("Referencia")]
-    [Tooltip("Objeto hijo donde se sujetan las armas (por ejemplo un empty llamado 'WeaponHolder').")]
-    public Transform puntoSujecionArma;
+    [Header("Punto donde se sujetan las armas en el jugador")]
+    public Transform puntoSujecionArma;  // por ejemplo, un hijo llamado "WeaponHolder"
 
     [Header("Configuración")]
     public int maximoArmas = 2;
 
     private ArmaDeFuego[] armas;
     private int indiceArmaActiva = -1;
+
+    // Evento para avisar a la UI cuando cambia el arma activa
+    public event Action OnWeaponChanged;
 
     void Awake()
     {
@@ -24,28 +27,42 @@ public class InventarioArmasJugador : MonoBehaviour
 
     void Update()
     {
-        // Cambiar entre arma 1 y 2
+        // Cambiar entre arma 1 y arma 2
         if (Input.GetKeyDown(KeyCode.Alpha1))
-        {
             CambiarArma(0);
-        }
 
         if (Input.GetKeyDown(KeyCode.Alpha2))
-        {
             CambiarArma(1);
+
+        // NUEVO: rueda del ratón
+        float scroll = Input.GetAxis("Mouse ScrollWheel");
+        if (Mathf.Abs(scroll) > 0.01f)
+        {
+            int dir = scroll > 0 ? 1 : -1;
+            int next = FindNextWeaponIndex(dir);
+            if (next != indiceArmaActiva)
+                CambiarArma(next);
         }
     }
 
-    /// <summary>
-    /// Intenta recoger un arma nueva.
-    /// Si hay hueco libre, la añade.
-    /// Si no hay hueco, suelta el arma actual al suelo y la sustituye.
-    /// </summary>
-    public bool IntentarRecogerArma(GameObject prefabArmaEnMano, Vector3 posicionDrop, Quaternion rotacionDrop)
+    int FindNextWeaponIndex(int dir)
+    {
+        if (maximoArmas <= 0) return -1;
+        int i = indiceArmaActiva;
+        for (int step = 1; step <= maximoArmas; step++)
+        {
+            int idx = (i + dir * step) % maximoArmas;
+            if (idx < 0) idx += maximoArmas;
+            if (armas[idx] != null) return idx;
+        }
+        return indiceArmaActiva; // no change
+    }
+
+    public bool IntentarRecogerArma(GameObject prefabArmaEnMano, Vector3 posicionSuelo, Quaternion rotacionSuelo)
     {
         if (puntoSujecionArma == null)
         {
-            Debug.LogWarning("InventarioArmasJugador: no hay puntoSujecionArma asignado.");
+            Debug.LogWarning("InventarioArmasJugador: falta asignar 'puntoSujecionArma'.");
             return false;
         }
 
@@ -60,19 +77,19 @@ public class InventarioArmasJugador : MonoBehaviour
             }
         }
 
-        // 2) Si hay hueco libre, simplemente la añadimos ahí
+        // Si hay hueco libre AÑADE
         if (indiceLibre != -1)
         {
-            ArmaDeFuego armaNueva = InstanciarArmaEnMano(prefabArmaEnMano);
-            if (armaNueva == null) return false;
+            ArmaDeFuego nuevaArma = InstanciarArmaEnMano(prefabArmaEnMano);
+            if (nuevaArma == null) return false;
 
-            armas[indiceLibre] = armaNueva;
+            armas[indiceLibre] = nuevaArma;
             CambiarArma(indiceLibre);
 
             return true;
         }
 
-        // 3) Si NO hay hueco libre -> soltar arma actual y sustituir
+        // Si NO hay hueco libre, soltar arma actual y sustituir
         int indiceActual = indiceArmaActiva;
         if (indiceActual < 0 || indiceActual >= maximoArmas)
             indiceActual = 0;
@@ -82,7 +99,7 @@ public class InventarioArmasJugador : MonoBehaviour
         if (armaActual != null && armaActual.prefabPickupSuelo != null)
         {
             // Instanciamos el pickup de la arma actual en el suelo
-            Instantiate(armaActual.prefabPickupSuelo, posicionDrop, rotacionDrop);
+            Instantiate(armaActual.prefabPickupSuelo, posicionSuelo, rotacionSuelo);
         }
 
         if (armaActual != null)
@@ -91,11 +108,11 @@ public class InventarioArmasJugador : MonoBehaviour
             armas[indiceActual] = null;
         }
 
-        // Ahora instanciamos la nueva en esa misma posición del inventario
-        ArmaDeFuego nuevaArma = InstanciarArmaEnMano(prefabArmaEnMano);
-        if (nuevaArma == null) return false;
+        // Instanciar la nueva arma en la mano
+        ArmaDeFuego nueva = InstanciarArmaEnMano(prefabArmaEnMano);
+        if (nueva == null) return false;
 
-        armas[indiceActual] = nuevaArma;
+        armas[indiceActual] = nueva;
         CambiarArma(indiceActual);
 
         return true;
@@ -109,9 +126,13 @@ public class InventarioArmasJugador : MonoBehaviour
 
         ArmaDeFuego arma = armaGO.GetComponent<ArmaDeFuego>();
         if (arma == null)
+            Debug.LogWarning("El prefab de arma en mano no tiene ArmaDeFuego.");
+        else
         {
-            Debug.LogWarning("El prefab de arma no tiene componente ArmaDeFuego.");
+            // inicialmente desuscribimos input hasta que se seleccione
+            arma.SetEquipped(false);
         }
+
         return arma;
     }
 
@@ -125,6 +146,8 @@ public class InventarioArmasJugador : MonoBehaviour
 
         indiceArmaActiva = indice;
         ActualizarArmaActivaVisual();
+
+        OnWeaponChanged?.Invoke();
     }
 
     private void ActualizarArmaActivaVisual()
@@ -133,8 +156,20 @@ public class InventarioArmasJugador : MonoBehaviour
         {
             if (armas[i] != null)
             {
-                armas[i].gameObject.SetActive(i == indiceArmaActiva);
+                bool activa = (i == indiceArmaActiva);
+                armas[i].gameObject.SetActive(activa);
+
+                // importante: sólo la arma activa responde a Input
+                armas[i].SetEquipped(activa);
             }
         }
+    }
+
+    public ArmaDeFuego ObtenerArmaActiva()
+    {
+        if (indiceArmaActiva < 0 || indiceArmaActiva >= maximoArmas)
+            return null;
+
+        return armas[indiceArmaActiva];
     }
 }

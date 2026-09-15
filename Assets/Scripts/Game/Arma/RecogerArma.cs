@@ -10,33 +10,86 @@ public class RecogerArma : MonoBehaviour
     public float distanciaRecogida = 3f;
     public KeyCode teclaRecoger = KeyCode.E;
 
+    // Almacenamos el nombre del arma para la UI
+    private string nombreArma;
+    private bool estaEnRango = false;
+
+    void Start()
+    {
+        // Intentamos obtener el nombre del prefab del arma.
+        // Si tiene un componente de arma (por ejemplo, 'ArmaDeFuego'), úsalo.
+        if (prefabArmaEnMano != null)
+        {
+            // Ejemplo: Suponiendo que tienes un script base de arma llamado 'BaseArma'
+            // Puedes usar el nombre del objeto si no tienes un script específico de nombre:
+            nombreArma = prefabArmaEnMano.name.Replace("(Clone)", "").Trim(); 
+        }
+        else
+        {
+            nombreArma = "Arma Desconocida";
+        }
+    }
+
     void Update()
     {
         GameObject jugador = GameObject.FindGameObjectWithTag("Player");
         if (jugador == null) return;
 
         float dist = Vector3.Distance(jugador.transform.position, transform.position);
-        if (dist > distanciaRecogida) return;
 
-        if (Input.GetKeyDown(teclaRecoger))
+        if (dist <= distanciaRecogida)
         {
-            InventarioArmasJugador inventario = jugador.GetComponent<InventarioArmasJugador>();
-            if (inventario == null)
+            // --- Lógica de UI: Mostrar el mensaje ---
+            if (!estaEnRango && ControladorUIRecogida.Instancia != null)
             {
-                Debug.LogWarning("El jugador no tiene InventarioArmasJugador.");
-                return;
+                ControladorUIRecogida.Instancia.MostrarMensaje(nombreArma, teclaRecoger);
+                estaEnRango = true;
             }
-
-            bool recogida = inventario.IntentarRecogerArma(
-                prefabArmaEnMano,
-                transform.position,
-                transform.rotation
-            );
-
-            if (recogida)
+            
+            // --- Lógica de Recogida ---
+            if (Input.GetKeyDown(teclaRecoger))
             {
-                Destroy(gameObject);
+                InventarioArmasJugador inventario = jugador.GetComponent<InventarioArmasJugador>();
+                if (inventario == null)
+                {
+                    Debug.LogWarning("El jugador no tiene InventarioArmasJugador.");
+                    return;
+                }
+
+                bool recogida = inventario.IntentarRecogerArma(
+                    prefabArmaEnMano,
+                    transform.position,
+                    transform.rotation
+                );
+
+                if (recogida)
+                {
+                    // --- Ocultar UI antes de destruir ---
+                    if (ControladorUIRecogida.Instancia != null)
+                    {
+                        ControladorUIRecogida.Instancia.OcultarMensaje();
+                    }
+                    Destroy(gameObject);
+                }
             }
+        }
+        else
+        {
+            // --- Lógica de UI: Ocultar el mensaje ---
+            if (estaEnRango && ControladorUIRecogida.Instancia != null)
+            {
+                ControladorUIRecogida.Instancia.OcultarMensaje();
+                estaEnRango = false;
+            }
+        }
+    }
+
+    // Asegurarse de ocultar el mensaje si el jugador sale del rango justo antes de que el objeto sea destruido
+    private void OnDestroy()
+    {
+        if (ControladorUIRecogida.Instancia != null && estaEnRango)
+        {
+            ControladorUIRecogida.Instancia.OcultarMensaje();
         }
     }
 }

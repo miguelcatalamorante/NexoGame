@@ -43,7 +43,7 @@ public class GameOverUI : MonoBehaviour
 
         // Mostrar kills
         if (scoreLabel != null)
-            scoreLabel.text = $"Enemigos eliminados: {kills}";
+            scoreLabel.text = $"Puntuación: {kills}";
 
         // Desbloquear cursor para interactuar con botones
         Cursor.lockState = CursorLockMode.None;

@@ -9,11 +9,17 @@ public class MenuPrincipalUI : MonoBehaviour
     [Header("Paneles")]
     public GameObject panelPrincipal;
     public GameObject panelOpciones;
-    public GameObject panelControles;   // NUEVO
-    public GameObject panelCreditos;    // NUEVO
+    public GameObject panelControles;
+    public GameObject panelCreditos;
 
     [Header("Fundido (opcional)")]
     public FundidoEscena fundido;
+
+    [Header("Sonido")]
+    // Referencia al componente Audio Source en este mismo objeto
+    public AudioSource audioSource;
+    // Referencia al Audio Clip que suena al hacer click
+    public AudioClip sonidoClick; 
 
     void Start()
     {
@@ -33,28 +39,64 @@ public class MenuPrincipalUI : MonoBehaviour
         if (panel) panel.SetActive(true);
     }
 
+    // Método privado para reproducir el sonido de clic
+    void ReproducirClick()
+    {
+        // Solo reproduce si tenemos ambos componentes asignados
+        if (audioSource != null && sonidoClick != null)
+        {
+            // PlayOneShot evita que se corte el sonido si se pulsa rápidamente
+            audioSource.PlayOneShot(sonidoClick);
+        }
+    }
+
     // --- BOTONES ---
+    
     public void AlPulsarJugar()
     {
+        ReproducirClick(); // Llama al sonido
+        
         if (!Application.CanStreamedLevelBeLoaded(nombreEscenaJuego))
         {
             Debug.LogError($"La escena '{nombreEscenaJuego}' no está en Build Settings.");
             return;
         }
+        
         if (fundido) fundido.FundirYCargarEscena(nombreEscenaJuego);
         else SceneManager.LoadScene(nombreEscenaJuego);
     }
 
-    public void AlPulsarOpciones()  => MostrarSolo(panelOpciones);
-    public void AlPulsarControles() => MostrarSolo(panelControles);   // NUEVO
-    public void AlPulsarCreditos()  => MostrarSolo(panelCreditos);    // NUEVO
-    public void AlPulsarVolver()    => MostrarSolo(panelPrincipal);
+    public void AlPulsarOpciones()
+    {
+        ReproducirClick(); // Llama al sonido
+        MostrarSolo(panelOpciones);
+    }
+
+    public void AlPulsarControles()
+    {
+        ReproducirClick(); // Llama al sonido
+        MostrarSolo(panelControles);
+    }
+    
+    public void AlPulsarCreditos()
+    {
+        ReproducirClick(); // Llama al sonido
+        MostrarSolo(panelCreditos);
+    }
+    
+    public void AlPulsarVolver()
+    {
+        ReproducirClick(); // Llama al sonido
+        MostrarSolo(panelPrincipal);
+    }
 
     public void AlPulsarSalir()
     {
+        ReproducirClick(); // Llama al sonido
+        
         Application.Quit();
-#if UNITY_EDITOR
+        #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
-#endif
+        #endif
     }
 }
