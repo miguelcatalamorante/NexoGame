@@ -1,6 +1,6 @@
 # 🧟 NexoGame
 
-Videojuego de supervivencia contra zombis desarrollado en **Unity y C#** como proyecto personal.
+Videojuego de supervivencia contra zombis desarrollado en **Unity y C#** como proyecto.
 
 El proyecto nace con el objetivo de poner en práctica el desarrollo de videojuegos, programación orientada a objetos y creación de diferentes sistemas de gameplay utilizando Unity.
 
